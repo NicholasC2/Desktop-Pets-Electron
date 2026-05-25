@@ -13,8 +13,17 @@
   "build": {
     "appId": "com.nicholasc2.fl-dance",
     "productName": "FL Dance Electron",
+
     "win": {
       "target": "nsis"
+    },
+
+    "linux": {
+      "target": ["AppImage"]
+    },
+
+    "mac": {
+      "target": ["dmg"]
     }
   },
 
