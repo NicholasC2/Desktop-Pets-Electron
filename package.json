@@ -1,6 +1,6 @@
 {
   "name": "fl-dance-electron",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "FL dance but made in electron.",
   "main": "main.js",
   "type": "commonjs",
@@ -12,7 +12,7 @@
 
   "build": {
     "appId": "com.nicholasc2.fl-dance",
-    "productName": "FL Dance Electron",
+    "productName": "FL Dance",
 
     "win": {
       "target": "portable"
