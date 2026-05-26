@@ -2,12 +2,13 @@ const { BrowserWindow, app, ipcMain, Menu } = require("electron");
 const path = require("path");
 
 let win;
+let win2;
 
 function createWindow() {
 
 	win = new BrowserWindow({
 		width: 220,
-		height: 498,
+		height: 256,
 		transparent: true,
 		frame: false,
 		alwaysOnTop: true,
@@ -20,6 +21,60 @@ function createWindow() {
 		}
 	});
 
+	win2 = new BrowserWindow({
+		width: 220,
+		height: 256,
+		transparent: true,
+		frame: false,
+		alwaysOnTop: true,
+		resizable: false,
+		focusable: false,
+
+		webPreferences: {
+			nodeIntegration: true,
+			contextIsolation: false
+		}
+	})
+
+	win2.setAlwaysOnTop(true, "screen-saver");
+	win2.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+	win2.setIgnoreMouseEvents(true, {
+		forward: true
+	})
+
+	win2.loadFile(path.join(__dirname, "reflection.html"));
+
+	const syncReflectionPosition = () => {
+		const [x, y] = win.getPosition()
+		const [w, h] = win.getSize()
+
+		win2.setBounds({
+			x,
+			y: y + 242,
+			width: w,
+			height: 300
+		})
+	}
+
+	syncReflectionPosition()
+
+	async function updateReflection() {
+		if(win.isDestroyed() || win2.isDestroyed()) return;
+
+		const image = await win.capturePage()
+
+		const dataUrl = image.toDataURL()
+
+		win2.webContents.send(
+			'reflection-frame',
+			dataUrl
+		)
+	}
+
+	setInterval(updateReflection, 33)
+
+	win.on('move', syncReflectionPosition)
+
   	win.setAlwaysOnTop(true, "screen-saver");
   	win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
@@ -30,6 +85,8 @@ let dragging = false;
 let offset = { x: 0, y: 0 };
 
 ipcMain.on("drag-start", (event, mousePos) => {
+
+	win2.webContents.send("drag-start")
 
 	dragging = true;
 
@@ -52,8 +109,14 @@ ipcMain.on("drag-move", (event, mousePos) => {
 });
 
 ipcMain.on("drag-end", () => {
+	win2.webContents.send("drag-end")
+
 	dragging = false;
 });
+
+ipcMain.on("reflect-state", (e, i) => {
+	win2.webContents.send("reflect-state", i);
+})
 
 const animations = [
 	"Waiting",
