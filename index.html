@@ -55,6 +55,9 @@
 				rgba(0,0,0,var(--fade)) 0%,
 				rgba(0,0,0,0) calc(var(--fade) * 100%)
 			);
+
+			pointer-events: none;
+			-webkit-app-region: no-drag;
 		}
 
 		#container:active {
@@ -71,7 +74,7 @@
 			top: 0;
 			left: 0;
 
-			background: hsla(180, 1%, 13%, 0.5);
+			background: rgba(46, 46, 46, 0.75);
 			border-radius: 2px;
 			border: 2px black solid;
 
@@ -80,10 +83,14 @@
 			width: 100%;
 
 			box-sizing: border-box;
+
+			padding: 5px;
 		}
 		
 		#options-menu * {
 			margin: 5px;
+
+			filter: drop-shadow(0 0 2px black);
 		}
 
 		input[type="range"] {
@@ -189,7 +196,6 @@
 		let dragging = false;
 
 		container.addEventListener("mousedown", (e) => {
-
 			if (e.button !== 0) return;
 
 			dragging = true;
@@ -217,7 +223,7 @@
 			container.offsetHeight;
 
 			container.style.animation = "animate 1s steps(7) infinite";
-			}
+		}
 
 		window.addEventListener("mouseup", () => {
 
