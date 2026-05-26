@@ -2,65 +2,188 @@
 <html>
 <head>
 	<style>
+		@keyframes animate {
+			0%   { background-position-x: 0; }
+			100% { background-position-x: -1540px; }
+		}
+
 		html, body {
 			margin: 0;
 			padding: 0;
+			width: 100%;
+			height: 100%;
 			background: transparent;
 			overflow: hidden;
+
+			font-family: Arial, Helvetica, sans-serif;
 		}
 
 		#container {
 			width: 220px;
-			height: 220px;
+			height: 256px;
 			position: relative;
 
+			background-image: url("Dance_Large.png");
+			background-repeat: no-repeat;
+
+			filter: drop-shadow(0px 0px 5px black);
+
 			cursor: grab;
+
+			animation: animate 1s steps(7) infinite;
+
+			--fade: 0.3;
+		}
+
+		#container::after {
+			content: "";
+
+			display: block;
+
+			width: 220px;
+			height: 256px;
+
+			position: absolute;
+			top: 242px;
+			left: 0;
+			
+			background: inherit;
+			transform: scaleY(-1);
+
+			mask-image: linear-gradient(
+				to top,
+				rgba(0,0,0,var(--fade)) 0%,
+				rgba(0,0,0,0) calc(var(--fade) * 100%)
+			);
 		}
 
 		#container:active {
 			cursor: grabbing;
 		}
 
-		#anim {
-			width: 200px;
-			height: 200px;
+		#options-menu {
+			flex-direction: column;
+
+			align-items: flex-start;
 
 			position: absolute;
-			top: 10px;
-			left: 10px;
 
-			user-select: none;
-			-webkit-user-drag: none;
-			pointer-events: none;
+			top: 0;
+			left: 0;
 
-			filter: drop-shadow(0px 0px 5px black);
+			background: hsla(180, 1%, 13%, 0.5);
+			border-radius: 2px;
+			border: 2px black solid;
+
+			color: white;
+
+			width: 100%;
+
+			box-sizing: border-box;
+		}
+		
+		#options-menu * {
+			margin: 5px;
+		}
+
+		input[type="range"] {
+			-webkit-appearance: none;
+			appearance: none;
+
+			height: 3px;
+
+			background: #2a2a2a;
+			border-radius: 3px;
+			outline: none;
+		}
+
+		input[type="range"]::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+
+			width: 12px;
+			height: 12px;
+
+			background: rgb(255, 196, 86);
+			filter: drop-shadow(0 0 2px black);
+
+			border-radius: 50%;
+			cursor: pointer;
+		}
+
+		input[type="range"]::-webkit-slider-thumb:hover {
+			background: rgb(194, 126, 0);
+		}
+
+		.row {
+			display: flex;
+			flex-direction: row;
+			justify-content: center;
+			align-items: center;
+
 		}
 	</style>
 </head>
 
 <body>
 
-	<div id="container">
-		<img id="anim" src="animations/Waiting.gif">
+	<div id="container"></div>
+
+	<div id="options-menu" style="display:none;">
+		<label>Reflect</label>
+		<div class="row">
+			<input id="reflectSlider" type="range" min="0" max="1" step="0.01" value="0.3">
+			<label id="reflectValue"></label>
+		</div>
+		<label>Animation Speed</label>
+		<div class="row">
+			<input id="speedSlider" type="range" min="0.1" max="2" step="0.1" value="1">
+			<label id="speedValue"></label>s
+		</div>
 	</div>
 
 	<script>
 		const { ipcRenderer } = require("electron");
 
 		const container = document.querySelector("#container");
-		const anim = document.getElementById("anim");
 
-		const animations = [
-			"Waiting",
-			"Stepping",
-			"Jumping",
-			"Zombie",
-			"Waving",
-			"Hula",
-			"Windmill",
-			"Zitabata",
-			"Dervish"
-		];
+		const reflectSlider = document.querySelector("#reflectSlider");
+		const speedSlider = document.querySelector("#speedSlider")
+
+		reflectSlider.addEventListener("input", ()=>{
+			container.style.setProperty("--fade", reflectSlider.value)
+		})
+
+		speedSlider.addEventListener("input", ()=>{
+			container.style.animationDuration = speedSlider.value+"s"
+		})
+
+		const optionsMenu = document.getElementById("options-menu")
+		
+		const sliders = [reflectSlider, speedSlider];
+
+		sliders.forEach((slider) => {
+			const valueLabel = document.getElementById(
+				slider.id.replace("Slider", "Value")
+			);
+
+			const stepDecimals = (() => {
+				const step = slider.step;
+				if (!step.includes(".")) return 0;
+				return step.split(".")[1].length;
+			})();
+
+			function update() {
+				const val = parseFloat(slider.value);
+
+				if (valueLabel) {
+					valueLabel.textContent = val.toFixed(stepDecimals);
+				}
+			}
+
+			update();
+			slider.addEventListener("input", update);
+		});
 
 		let animation = 0;
 		let dragging = false;
@@ -70,7 +193,7 @@
 			if (e.button !== 0) return;
 
 			dragging = true;
-			anim.src = "animations/Held.gif";
+			container.style.backgroundPositionY = "-2304px";
 
 			ipcRenderer.send("drag-start", {
 				x: e.screenX,
@@ -88,13 +211,23 @@
 			});
 		});
 
+		function restartAnimation() {
+			container.style.animation = "none";
+
+			container.offsetHeight;
+
+			container.style.animation = "animate 1s steps(7) infinite";
+			}
+
 		window.addEventListener("mouseup", () => {
 
 			if (!dragging) return;
 
 			dragging = false;
 
-			anim.src = `animations/${animations[animation]}.gif`;
+			container.style.backgroundPositionY = -256 * animation + "px";
+
+			restartAnimation()
 
 			ipcRenderer.send("drag-end");
 		});
@@ -107,9 +240,15 @@
 		ipcRenderer.on("set-animation", (e, i) => {
 			animation = i;
 			if (!dragging) {
-				anim.src = `animations/${animations[i]}.gif`;
+				container.style.backgroundPositionY = -256 * animation + "px";
+
+				restartAnimation()
 			}
 		});
+
+		ipcRenderer.on("toggle-options", (e, i) => {
+			optionsMenu.style.display = optionsMenu.style.display == "flex" ? "none" : "flex";
+		})
 	</script>
 
 </body>

@@ -7,7 +7,7 @@ function createWindow() {
 
 	win = new BrowserWindow({
 		width: 220,
-		height: 220,
+		height: 498,
 		transparent: true,
 		frame: false,
 		alwaysOnTop: true,
@@ -20,8 +20,8 @@ function createWindow() {
 		}
 	});
 
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  	win.setAlwaysOnTop(true, "screen-saver");
+  	win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
 	win.loadFile(path.join(__dirname, "index.html"));
 }
@@ -82,6 +82,13 @@ ipcMain.on("show-context-menu", () => {
 	}));
 
 	template.push(
+		{ type: "separator" },
+		{
+			label: "Show/Hide Options",
+			click: () => {
+				win.webContents.send("toggle-options");
+			}
+		},
 		{ type: "separator" },
 		{
 			label: "Quit",
