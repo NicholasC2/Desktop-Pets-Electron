@@ -26,7 +26,7 @@
       "target": ["dmg"]
     },
 
-    "icon": "icon.ico"
+    "icon": "icon.png"
   },
 
   "devDependencies": {
