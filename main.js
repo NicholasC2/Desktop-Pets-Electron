@@ -52,26 +52,11 @@ function createWindow() {
 			x,
 			y: y + 242,
 			width: w,
-			height: 300
+			height: 256
 		})
 	}
 
 	syncReflectionPosition()
-
-	async function updateReflection() {
-		if(win.isDestroyed() || win2.isDestroyed()) return;
-
-		const image = await win.capturePage()
-
-		const dataUrl = image.toDataURL()
-
-		win2.webContents.send(
-			'reflection-frame',
-			dataUrl
-		)
-	}
-
-	setInterval(updateReflection, 33)
 
 	win.on('move', syncReflectionPosition)
 

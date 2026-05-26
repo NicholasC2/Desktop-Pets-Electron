@@ -135,7 +135,7 @@
 		const reflectSlider = document.querySelector("#reflectSlider");
 		const speedSlider = document.querySelector("#speedSlider")
 
-		function syncState(reset = false, anim = null) {
+		function syncState(anim = null, reset = false) {
 			ipcRenderer.send("reflect-state", {
 				animation: anim == null ? animation : anim,
 				speed: speedSlider.value,
@@ -214,7 +214,7 @@
 
 			container.style.animationName = `animate`;
 
-			syncState(true, animation);
+			syncState(animation, true);
 		}
 
 		window.addEventListener("mouseup", () => {
