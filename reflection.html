@@ -1,91 +1,101 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <style>
-            html,
-            head,
-            body {
-                margin:0;
-                padding:0;
-                width: 100%;
-                height: 100%;
+<head>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-                overflow: hidden;
+        * {
+            pointer-events: none;
+            user-select: none;
+        }
 
-                font-family: Arial, Helvetica, sans-serif;
-            }
+        .main-content {
+            width: 200px;
+            height: 200px;
 
-            * {
-                pointer-events: none;
-                user-select: none;
-            }
+            display: flex;
+            justify-content: center;
+            align-items: center;
 
-            .main-content {
-                background: black;
-                background-repeat: no-repeat;
-                color: white;
-                width: 100%;
-                height: 100%;
-                text-align: center;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                transform: scaleY(-1);
+            color: white;
+            text-align: center;
 
-			    --fade: 0.3;
+            background: rgba(50, 50, 50, 0.5);
+            background-repeat: no-repeat;
+            background-position: 0 0;
 
-                mask-image: linear-gradient(
-                    to top,
-                    rgba(0,0,0,var(--fade)) 0%,
-                    rgba(0,0,0,0) calc(var(--fade) * 100%)
-                );
+            transform: scaleY(-1);
 
-                filter: drop-shadow(0 0 2px black);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="main-content">
+            --fade: 0.3;
 
-        </div>
+            mask-image: linear-gradient(
+                to top,
+                rgba(0, 0, 0, var(--fade)) 0%,
+                rgba(0, 0, 0, 0) calc(var(--fade) * 100%)
+            );
 
-        <script>
-            const { ipcRenderer } = require("electron");
+            filter: drop-shadow(0 0 2px black);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content"></div>
 
-            let frameWidth = 0;
+    <script>
+        const { ipcRenderer } = require("electron");
 
-            ipcRenderer.on("set-animation", (e, animation, width) => {
-                const content = document.querySelector(".main-content");
+        const content = document.querySelector(".main-content");
 
-                content.innerHTML = "";
+        function resetAnimation() {
+            content.style.background = "rgba(50, 50, 50, 0.5)";
+            content.style.backgroundImage = "none";
+            content.style.backgroundPosition = "0px 0px";
 
-                content.style.background = "none";
-                content.style.backgroundImage = `url(${animation})`;
+            content.style.width = "200px";
+            content.style.height = "200px";
 
-                const img = new Image();
-                img.src = animation;
+            content.style.setProperty("--fade", 0.3);
 
-                img.onload = () => {
-                    frameWidth = img.width / width;
+            ipcRenderer.send("set-size", 200, 200);
+        }
 
-                    content.style.width = frameWidth + "px";
-                    content.style.height = img.height + "px";
+        ipcRenderer.on("reset-animation", resetAnimation);
 
-                    ipcRenderer.send("set-size", frameWidth, img.height);
-                };
-            });
+        ipcRenderer.on("set-animation", (e, animation, frameCount) => {
+            content.style.background = "none";
+            content.style.backgroundImage = `url(${animation})`;
+            content.style.backgroundPosition = "0px 0px";
 
-            ipcRenderer.on("set-animation-pos", (e, pos) => {
-                const content = document.querySelector(".main-content");
+            const img = new Image();
+            img.src = animation;
 
-                content.style.backgroundPosition = `${pos}px 0px`;
-            })
+            img.onload = () => {
+                const frameWidth = img.width / frameCount;
 
-            ipcRenderer.on("set-animation-reflection", (e, reflection) => {
-                const content = document.querySelector(".main-content");
+                content.style.width = `${frameWidth}px`;
+                content.style.height = `${img.height}px`;
 
-			    content.style.setProperty("--fade", reflection);
-            })
-        </script>
-    </body>
+                ipcRenderer.send("set-size", frameWidth, img.height);
+            };
+        });
+
+        ipcRenderer.on("set-animation-pos", (e, pos) => {
+            content.style.backgroundPosition = `${pos}px 0px`;
+        });
+
+        ipcRenderer.on("set-animation-reflection", (e, reflection) => {
+            content.style.setProperty("--fade", reflection);
+        });
+
+        resetAnimation();
+    </script>
+</body>
 </html>

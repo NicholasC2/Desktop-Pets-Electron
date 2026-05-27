@@ -1,137 +1,239 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <style>
-            html,
-            head,
-            body {
-                margin:0;
-                padding:0;
-                width: 100%;
-                height: 100%;
+<head>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
 
-                overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-                font-family: Arial, Helvetica, sans-serif;
+        * {
+            user-select: none;
+            box-sizing: border-box;
+        }
+
+        .main-content {
+            width: 200px;
+            height: 200px;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            color: white;
+            text-align: center;
+
+            background: rgba(50, 50, 50, 0.5);
+            background-repeat: no-repeat;
+
+            filter: drop-shadow(0 0 2px black);
+
+            cursor: grab;
+        }
+
+        .main-content:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content">
+        Pet not loaded.
+    </div>
+
+    <script>
+        const { ipcRenderer } = require("electron");
+
+        const content = document.querySelector(".main-content");
+
+        let frames = 1;
+        let frameWidth = 0;
+
+        let bgX = 0;
+
+        let updateBPM = 60;
+
+        let isDragging = false;
+
+        function getFrameDelay() {
+            return (60000 / updateBPM) / frames;
+        }
+
+        function updateAnimationFrame() {
+            if (!frameWidth) return;
+
+            bgX -= frameWidth;
+
+            const maxOffset = frameWidth * frames;
+
+            if (Math.abs(bgX) >= maxOffset) {
+                bgX = 0;
             }
 
-            * {
-                pointer-events: none;
-                user-select: none;
+            content.style.backgroundPosition =
+                `${bgX}px 0px`;
+
+            ipcRenderer.send(
+                "set-animation-pos",
+                bgX
+            );
+        }
+
+        function animationLoop() {
+            updateAnimationFrame();
+
+            setTimeout(
+                animationLoop,
+                getFrameDelay()
+            );
+        }
+
+        animationLoop();
+
+        function resetAnimation() {
+            frames = 1;
+            frameWidth = 0;
+            bgX = 0;
+            updateBPM = 60;
+
+            content.innerHTML = "Pet not loaded.";
+
+            content.style.background =
+                "rgba(50, 50, 50, 0.5)";
+
+            content.style.backgroundImage = "none";
+
+            content.style.backgroundPosition =
+                "0px 0px";
+
+            content.style.width = "200px";
+            content.style.height = "200px";
+
+            ipcRenderer.send(
+                "set-size",
+                200,
+                200
+            );
+        }
+
+        function setAnimation(animation, width) {
+            content.innerHTML = "";
+
+            content.style.background = "none";
+
+            content.style.backgroundImage =
+                `url(${animation})`;
+
+            const img = new Image();
+
+            img.src = animation;
+
+            img.onload = () => {
+                frames = width;
+
+                frameWidth = img.width / frames;
+
+                bgX = 0;
+
+                content.style.width =
+                    `${frameWidth}px`;
+
+                content.style.height =
+                    `${img.height}px`;
+
+                content.style.backgroundPosition =
+                    "0px 0px";
+
+                ipcRenderer.send(
+                    "set-size",
+                    frameWidth,
+                    img.height
+                );
+            };
+        }
+
+        ipcRenderer.on(
+            "set-animation-speed",
+            (e, bpm) => {
+                updateBPM = Number(bpm) || 60;
             }
+        );
 
-            .main-content {
-                background: rgba(50, 50, 50, 0.5);
-                background-repeat: no-repeat;
-                color: white;
-                width: 100%;
-                height: 100%;
-                text-align: center;
-                display: flex;
-                justify-content: center;
-                align-items: center;
+        ipcRenderer.on(
+            "reset-animation",
+            resetAnimation
+        );
 
-                filter: drop-shadow(0 0 2px black);
+        ipcRenderer.on(
+            "set-animation",
+            (e, animation, width) => {
+                setAnimation(animation, width);
             }
-        </style>
-    </head>
-    <body>
-        <div class="main-content">
-            Pet not loaded.
-        </div>
+        );
 
-        <script>
-            const { ipcRenderer } = require("electron");
-
-            window.addEventListener("contextmenu", (e) => {
+        window.addEventListener(
+            "contextmenu",
+            (e) => {
                 e.preventDefault();
 
-                ipcRenderer.send("open-menu", {
-                    x: e.screenX,
-                    y: e.screenY
-                });
-            });
-
-            function runUpdate() {
-                updateBackgroundPos();
-
-                setTimeout(runUpdate, (60000 / updateBPM) / frames);
+                ipcRenderer.send(
+                    "open-menu",
+                    {
+                        x: e.screenX,
+                        y: e.screenY
+                    }
+                );
             }
+        );
 
-            let updateBackgroundPos = ()=>{}
-            let frameWidth = 0;
-            let bgX = 0;
-
-            let updateBPM = 60
-
-            let frames = 0;
-
-            runUpdate();
-
-            ipcRenderer.on("set-animation-speed", (e, bpm) => {
-                updateBPM = bpm;
-            })
-
-            ipcRenderer.on("set-animation", (e, animation, width) => {
-                const content = document.querySelector(".main-content");
-
-                content.innerHTML = "";
-
-                content.style.background = "none";
-                content.style.backgroundImage = `url(${animation})`;
-
-                const img = new Image();
-                img.src = animation;
-
-                img.onload = () => {
-                    frames = width;
-
-                    frameWidth = img.width / frames;
-
-                    content.style.width = frameWidth + "px";
-                    content.style.height = img.height + "px";
-
-                    bgX = 0;
-
-                    ipcRenderer.send("set-size", frameWidth, img.height);
-
-                    updateBackgroundPos = () => {
-                        bgX -= frameWidth;
-
-                        if (bgX <= -img.width) {
-                            bgX = 0;
-                        }
-
-                        content.style.backgroundPosition = `${bgX}px 0px`;
-
-                        ipcRenderer.send("set-animation-pos", bgX)
-                    };
-                };
-            });
-
-            let isDragging = false;
-
-            window.addEventListener("mousedown", (e) => {
-                if(e.button !== 0) return;
+        window.addEventListener(
+            "mousedown",
+            (e) => {
+                if (e.button !== 0) return;
 
                 isDragging = true;
 
-                ipcRenderer.send("drag-start");
-            });
+                ipcRenderer.send(
+                    "drag-start",
+                    {
+                        mouseX: e.screenX,
+                        mouseY: e.screenY
+                    }
+                );
+            }
+        );
 
-            window.addEventListener("mousemove", (e) => {
+        window.addEventListener(
+            "mousemove",
+            (e) => {
                 if (!isDragging) return;
 
-                ipcRenderer.send("drag-move", {
-                    x: e.screenX,
-                    y: e.screenY
-                });
-            });
+                ipcRenderer.send(
+                    "drag-move",
+                    {
+                        x: e.screenX,
+                        y: e.screenY
+                    }
+                );
+            }
+        );
 
-            window.addEventListener("mouseup", () => {
+        window.addEventListener(
+            "mouseup",
+            (e) => {
+                if (e.button !== 0) return;
+
                 isDragging = false;
+
                 ipcRenderer.send("drag-end");
-            });
-        </script>
-    </body>
+            }
+        );
+    </script>
+</body>
 </html>

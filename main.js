@@ -1,16 +1,26 @@
 const { BrowserWindow, app, ipcMain, dialog, screen } = require("electron");
+const Store = require("electron-store");
 const path = require("path");
-const fs = require("fs");
 const unzipper = require("unzipper");
+
+const store = new Store.default();
 
 let menuWindow = null;
 let mainWindow = null;
+let reflectionWindow = null;
 
 let petAnimations = [];
 let petManifest = null;
+let holdingAnimation = null;
 
 let animationSpeed = 60;
 let reflect = 0.3;
+
+let currentAnimation = {};
+
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
 
 function safeCloseMenu() {
 	if (!menuWindow || menuWindow.isDestroyed()) return;
@@ -21,9 +31,7 @@ function safeCloseMenu() {
 }
 
 function openMenu(x, y, html = "") {
-	if (menuWindow && !menuWindow.isDestroyed()) {
-		safeCloseMenu()
-	}
+	safeCloseMenu();
 
 	menuWindow = new BrowserWindow({
 		width: 200,
@@ -44,30 +52,211 @@ function openMenu(x, y, html = "") {
 	menuWindow.loadFile(path.join(__dirname, "menu.html"));
 
 	menuWindow.webContents.on("did-finish-load", () => {
+		if (!menuWindow || menuWindow.isDestroyed()) return;
+
 		menuWindow.webContents.send("menu-content", html);
 	});
 
 	menuWindow.on("blur", () => {
-		if (menuWindow && !menuWindow.isDestroyed()) {
-			safeCloseMenu();
-		}
-		menuWindow = null;
+		safeCloseMenu();
 	});
+
+	return menuWindow;
+}
+
+function sendAnimation(animation, width) {
+	if (!mainWindow || !reflectionWindow) return;
+
+	mainWindow.webContents.send(
+		"set-animation",
+		animation,
+		width
+	);
+
+	reflectionWindow.webContents.send(
+		"set-animation",
+		animation,
+		width
+	);
+
+	currentAnimation = { animation, width };
+
+	store.set("animation", animation);
+	store.set("animationWidth", width);
+}
+
+function setAnimationSpeed(speed) {
+	animationSpeed = Number(speed);
+
+	store.set("speed", animationSpeed);
+
+	mainWindow?.webContents.send(
+		"set-animation-speed",
+		animationSpeed
+	);
+}
+
+function setReflection(value) {
+	reflect = Number(value);
+
+	store.set("reflection", reflect);
+
+	reflectionWindow?.webContents.send(
+		"set-animation-reflection",
+		reflect
+	);
+}
+
+function resetPet() {
+	store.delete("petPath");
+	store.delete("animation");
+	store.delete("animationWidth");
+	store.delete("reflection");
+	store.delete("speed");
+
+	reflect = 0.3;
+	animationSpeed = 60;
+
+	currentAnimation = {};
+
+	petManifest = null;
+	petAnimations = [];
+	holdingAnimation = null;
+
+	mainWindow?.webContents.send("reset-animation");
+	reflectionWindow?.webContents.send("reset-animation");
+}
+
+function setReflectionPos() {
+	if (
+		!mainWindow ||
+		!reflectionWindow ||
+		mainWindow.isDestroyed() ||
+		reflectionWindow.isDestroyed()
+	) {
+		return;
+	}
+
+	const [x, y] = mainWindow.getPosition();
+	const [, h] = mainWindow.getSize();
+
+	reflectionWindow.setPosition(
+		x,
+		y + h - (petManifest?.reflectionOffset ?? 0)
+	);
+}
+
+async function loadPet(filePath) {
+	const [x, y] = mainWindow.getPosition();
+
+	const directory = await unzipper.Open.file(filePath);
+
+	petAnimations = [];
+	petManifest = null;
+	holdingAnimation = null;
+
+	const imageMap = {};
+
+	const tasks = directory.files.map(async (file) => {
+		if (file.path.endsWith("manifest.json")) {
+			try {
+				const parsedManifest = JSON.parse(
+					(await file.buffer()).toString("utf8")
+				);
+
+				if (Array.isArray(parsedManifest.animations)) {
+					petManifest = parsedManifest;
+
+					const menu = openMenu(x, y, "Pet Loaded!");
+
+					setTimeout(() => {
+						if (!menu || menu.isDestroyed()) return;
+
+						menu.removeAllListeners("blur");
+						menu.close();
+
+						if (menu === menuWindow) {
+							menuWindow = null;
+						}
+					}, 1000);
+				}
+			} catch {
+				openMenu(x, y, "Invalid Manifest!");
+			}
+
+			return;
+		}
+
+		const ext = file.path
+			.split(".")
+			.at(-1)
+			.toLowerCase();
+
+		if (["png", "jpg", "jpeg"].includes(ext)) {
+			const mime = ext === "jpg" ? "jpeg" : ext;
+
+			const buffer = await file.buffer();
+
+			imageMap[file.path] =
+				`data:image/${mime};base64,${buffer.toString("base64")}`;
+		}
+	});
+
+	await Promise.all(tasks);
+
+	if (petManifest?.animations) {
+		petAnimations = petManifest.animations.map((anim) => ({
+			name: anim.name,
+			url: imageMap[anim.path] || null,
+			width: anim.width
+		}));
+	}
+
+	if (petManifest?.holdingAnimation) {
+		holdingAnimation = {
+			name: petManifest.holdingAnimation.name,
+			url:
+				imageMap[
+					petManifest.holdingAnimation.path
+				] || null,
+			width: petManifest.holdingAnimation.width
+		};
+	}
+
+	const savedAnimation = store.get("animation");
+	const savedAnimationWidth =
+		store.get("animationWidth");
+
+	if (savedAnimation && savedAnimationWidth) {
+		sendAnimation(
+			savedAnimation,
+			savedAnimationWidth
+		);
+	} else if (petAnimations[0]) {
+		sendAnimation(
+			petAnimations[0].url,
+			petAnimations[0].width
+		);
+	}
 }
 
 ipcMain.on("menu-height", (event, height) => {
 	if (!menuWindow || menuWindow.isDestroyed()) return;
 
 	const bounds = menuWindow.getBounds();
-	const display = screen.getDisplayNearestPoint(bounds);
+
+	const display =
+		screen.getDisplayNearestPoint(bounds);
+
 	const work = display.workArea;
 
 	let x = bounds.x;
 	let y = bounds.y;
+
 	const width = bounds.width;
 
 	if (x + width > work.x + work.width) {
-		x = x - width;
+		x -= width;
 	}
 
 	x = Math.max(work.x, x);
@@ -85,89 +274,64 @@ ipcMain.on("menu-height", (event, height) => {
 	});
 });
 
-ipcMain.on("click", async(e,i) => {
-	if(i.elem == "menu" || i.elem == "row" || i.elem == "animation-speed-slider") return;
-
-	if (menuWindow && !menuWindow.isDestroyed()) {
-		safeCloseMenu()
+ipcMain.on("click", async (e, i) => {
+	if (
+		i.elem === "menu" ||
+		i.elem === "row" ||
+		i.elem.endsWith("-slider")
+	) {
+		return;
 	}
-	menuWindow = null;
 
-	if(i.elem == "set-pet") {
-		const result = await dialog.showOpenDialog(mainWindow, {
-			title: "Select a pet",
-			properties: ["openFile"],
-			filters: [
-				{extensions: ["pet"], name: "Pet File"},
-				{extensions: ["zip"], name: "Zip Archive"},
-    			{ name: "All Files", extensions: ["*"] }
-			]
-		})
+	safeCloseMenu();
 
-		if(!result.canceled) {
-			loadPet(result.filePaths[0]);
+	if (i.elem === "set-pet") {
+		const result = await dialog.showOpenDialog(
+			mainWindow,
+			{
+				title: "Select a pet",
+				properties: ["openFile"],
+				filters: [
+					{
+						extensions: ["pet"],
+						name: "Pet File"
+					},
+					{
+						extensions: ["zip"],
+						name: "Zip Archive"
+					},
+					{
+						name: "All Files",
+						extensions: ["*"]
+					}
+				]
+			}
+		);
+
+		if (!result.canceled) {
+			store.delete("animation");
+			store.delete("animationWidth");
+
+			store.set(
+				"petPath",
+				result.filePaths[0]
+			);
+
+			await loadPet(result.filePaths[0]);
 		}
 	}
 
-	if(i.elem == "quit") {
-		process.exit(0)
+	if (i.elem === "reset") {
+		resetPet();
+	}
+
+	if (i.elem === "quit") {
+		app.quit();
 	}
 });
 
-async function loadPet(path) {
-	const [x, y] = mainWindow.getPosition();
-
-	const directory = await unzipper.Open.file(path);
-
-	petAnimations = [];
-	petManifest = null;
-
-	const imageMap = {};
-
-	const tasks = directory.files.map(async (file) => {
-
-		if (file.path.endsWith("manifest.json")) {
-			try {
-				const parsedManifest = JSON.parse(
-					(await file.buffer()).toString("utf8")
-				);
-
-				if (Array.isArray(parsedManifest.animations)) {
-					petManifest = parsedManifest;
-					openMenu(x, y, "Pet Loaded!");
-				}
-			} catch (err) {
-				openMenu(x, y, "Invalid Manifest!");
-			}
-			return;
-		}
-
-		const ext = file.path.split(".").at(-1).toLowerCase();
-
-		if (["png", "jpg", "jpeg"].includes(ext)) {
-			const mime = ext === "jpg" ? "jpeg" : ext;
-
-			const buffer = await file.buffer();
-
-			imageMap[file.path] =
-				`data:image/${mime};base64,${buffer.toString("base64")}`;
-		}
-	});
-
-	await Promise.all(tasks);
-
-	if (petManifest && Array.isArray(petManifest.animations)) {
-
-		petAnimations = petManifest.animations.map(anim => ({
-			name: anim.name,
-			url: imageMap[anim.path] || null,
-			width: anim.width
-		}));
-	}
-}
-
-app.whenReady().then(()=>{
-	let reflectionWindow = new BrowserWindow({
+app.whenReady().then(async () => {
+	reflectionWindow = new BrowserWindow({
 		width: 200,
 		height: 200,
 		transparent: true,
@@ -175,7 +339,6 @@ app.whenReady().then(()=>{
 		alwaysOnTop: true,
 		resizable: false,
 		focusable: false,
-
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false
@@ -190,111 +353,243 @@ app.whenReady().then(()=>{
 		alwaysOnTop: true,
 		resizable: false,
 		focusable: true,
-
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false
 		}
 	});
 
-	mainWindow.setAlwaysOnTop(true, "screen-saver");
-	reflectionWindow.setAlwaysOnTop(true, "screen-saver");
+	reflectionWindow.setIgnoreMouseEvents(true);
 
-	mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-	reflectionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	mainWindow.setAlwaysOnTop(
+		true,
+		"screen-saver"
+	);
 
-	function setReflectionPos() {
-		const [x, y] = mainWindow.getPosition();
-		const [w, h] = mainWindow.getSize();
+	reflectionWindow.setAlwaysOnTop(
+		true,
+		"screen-saver"
+	);
 
-		reflectionWindow.setPosition(x, y + h - (petManifest?.reflectionOffset ?? 0));
-	}
+	mainWindow.setVisibleOnAllWorkspaces(
+		true,
+		{
+			visibleOnFullScreen: true
+		}
+	);
 
-	setReflectionPos()
+	reflectionWindow.setVisibleOnAllWorkspaces(
+		true,
+		{
+			visibleOnFullScreen: true
+		}
+	);
 
-	mainWindow.loadFile(path.join(__dirname, "index.html"));
+	mainWindow.loadFile(
+		path.join(__dirname, "index.html")
+	);
 
-	reflectionWindow.loadFile(path.join(__dirname, "reflection.html"))
+	reflectionWindow.loadFile(
+		path.join(__dirname, "reflection.html")
+	);
 
-	mainWindow.on("close", ()=>{
-		process.exit(0);
-	})
-
-	ipcMain.on("set-size", (e, width, height) => {
-		reflectionWindow.setSize(width, height);
-		mainWindow.setSize(width, height);
+	mainWindow.on("close", () => {
+		app.quit();
 	});
 
-	mainWindow.on("move", setReflectionPos)
-	mainWindow.on("resize", setReflectionPos)
+	mainWindow.on("move", setReflectionPos);
+	mainWindow.on("resize", setReflectionPos);
 
-	ipcMain.on("set-animation", (event, animation, width) => {
-		mainWindow.webContents.send("set-animation", animation, width)
-		reflectionWindow.webContents.send("set-animation", animation, width)
-	})
-	
-	ipcMain.on("set-animation-speed", (e, speed) => {
-		animationSpeed = speed;
+	ipcMain.on(
+		"set-size",
+		(e, width, height) => {
+			width = Math.ceil(width);
+			height = Math.ceil(height);
 
-		mainWindow.webContents.send("set-animation-speed", animationSpeed)
-	})
+			mainWindow.setBounds({
+				width,
+				height
+			});
 
-	ipcMain.on("set-animation-pos", (e, pos) => {
-		reflectionWindow.send("set-animation-pos", pos)
-	})
+			reflectionWindow.setBounds({
+				width,
+				height
+			});
+		}
+	);
 
-	ipcMain.on("set-animation-reflection", (e,reflection) => {
-		reflect = reflection;
+	ipcMain.on(
+		"set-animation",
+		(e, animation, width) => {
+			sendAnimation(animation, width);
+		}
+	);
 
-		reflectionWindow.webContents.send("set-animation-reflection", reflect)
-	})
+	ipcMain.on(
+		"set-animation-speed",
+		(e, speed) => {
+			setAnimationSpeed(speed);
+		}
+	);
 
-	ipcMain.on("open-menu", (event, { x, y }) => {
-		openMenu(x, y, `
-			<button class='set-pet'>Set Pet</button>
-			${petAnimations.length == 0 ? "" : `
+	ipcMain.on(
+		"set-animation-pos",
+		(e, pos) => {
+			reflectionWindow?.webContents.send(
+				"set-animation-pos",
+				pos
+			);
+		}
+	);
+
+	ipcMain.on(
+		"set-animation-reflection",
+		(e, reflection) => {
+			setReflection(reflection);
+		}
+	);
+
+	ipcMain.on(
+		"open-menu",
+		(event, { x, y }) => {
+			openMenu(
+				x,
+				y,
+				`
+				<button class='set-pet'>Set Pet</button>
+
+				${
+					petAnimations.length === 0
+						? ""
+						: `
+					<hr>
+
+					${petAnimations
+						.map(
+							(anim) => `
+						<button onclick='setAnimation("${anim.url}", ${anim.width})'>
+							${anim.name}
+						</button>
+					`
+						)
+						.join("")}
+
+					<hr>
+
+					Animation Speed
+
+					<div class="row">
+						<input
+							class="animation-speed-slider"
+							type="range"
+							min="20"
+							max="300"
+							step="1"
+							value="${animationSpeed}"
+							oninput="setAnimationSpeed(this.value)"
+						>
+
+						<span class="animation-speed-label">
+							${animationSpeed} BPM
+						</span>
+					</div>
+
+					<hr>
+
+					Reflect
+
+					<div class="row">
+						<input
+							class="reflect-slider"
+							type="range"
+							min="0"
+							max="1"
+							step="0.01"
+							value="${reflect}"
+							oninput="setReflect(this.value)"
+						>
+
+						<span class="reflect-label">
+							${reflect}
+						</span>
+					</div>
+				`
+				}
+
 				<hr>
-				${petAnimations.map(anim => `
-					<button onclick='setAnimation("${anim.url}", ${anim.width})'>
-						${anim.name}
-					</button>
-				`).join("")}
-				<hr>
-				Animation Speed
-				<div class="row">
-					<input class="animation-speed-slider" type="range" min="20" max="300" step="1" value="${animationSpeed}" oninput="setAnimationSpeed(this.value)">
-					<span class="animation-speed-label">${animationSpeed}BPM</span>
-				</div>
-				<hr>
-				Reflect
-				<div class="row">
-					<input class="reflect-slider" type="range" min="0" max="1" step="0.01" value="${reflect}" oninput="setReflect(this.value)">
-					<span class="reflect-label">${reflect}</span>
-				</div>
-			`}
-			<hr>
-			<button class='quit'>Quit</button>
-		`);
-	});
 
-	let isDragging = false;
+				<button class="reset">
+					Reset
+				</button>
 
-	ipcMain.on("drag-start", () => {
+				<button class="quit">
+					Quit
+				</button>
+			`
+			);
+		}
+	);
+
+	ipcMain.on("drag-start", (e, data) => {
 		isDragging = true;
+
+		const [winX, winY] =
+			mainWindow.getPosition();
+
+		dragOffsetX = data.mouseX - winX;
+		dragOffsetY = data.mouseY - winY;
+
+		if (holdingAnimation?.url) {
+			mainWindow.webContents.send(
+				"set-animation",
+				holdingAnimation.url,
+				holdingAnimation.width
+			);
+
+			reflectionWindow.webContents.send(
+				"set-animation",
+				holdingAnimation.url,
+				holdingAnimation.width
+			);
+		}
 	});
 
 	ipcMain.on("drag-move", (e, data) => {
 		if (!isDragging) return;
 
-		const [winX, winY] = mainWindow.getSize();
-
-		const newX = (data.x);
-		const newY = (data.y);
-
-		mainWindow.setPosition(newX - winX/2, newY - winY/2);
+		mainWindow.setPosition(
+			data.x - dragOffsetX,
+			data.y - dragOffsetY
+		);
 	});
 
 	ipcMain.on("drag-end", () => {
+		if (holdingAnimation?.url) {
+			sendAnimation(
+				currentAnimation.animation,
+				currentAnimation.width
+			);
+		}
+
 		isDragging = false;
 	});
+
+	const petPath = store.get("petPath");
+
+	const reflection =
+		store.get("reflection");
+
+	const speed = store.get("speed");
+
+	if (petPath) {
+		await loadPet(petPath);
+	}
+
+	if (reflection !== undefined) {
+		setReflection(reflection);
+	}
+
+	if (speed !== undefined) {
+		setAnimationSpeed(speed);
+	}
 });
