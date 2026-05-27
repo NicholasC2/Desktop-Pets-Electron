@@ -1,6 +1,6 @@
 {
   "name": "desktop-pets-electron",
-  "version": "0.1",
+  "version": "0.1.0",
   "description": "Simple desktop pets.",
   "main": "main.js",
   "type": "commonjs",
