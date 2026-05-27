@@ -144,7 +144,6 @@ function setReflectionPos() {
 		x,
 		y + h - (petManifest?.reflectionOffset ?? 0)
 	);
-	reflectionWindow.focus() // fixes getting stuck behind taskbar I think
 }
 
 async function loadPet(filePath) {
@@ -339,7 +338,8 @@ app.whenReady().then(async () => {
 		frame: false,
 		alwaysOnTop: true,
 		resizable: false,
-		focusable: false,
+		skipTaskbar: true,
+		focusable: true,
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false
@@ -397,6 +397,10 @@ app.whenReady().then(async () => {
 	mainWindow.on("close", () => {
 		app.quit();
 	});
+
+	reflectionWindow.on("close", () => {
+		app.quit();
+	})
 
 	mainWindow.on("move", setReflectionPos);
 	mainWindow.on("resize", setReflectionPos);
@@ -562,6 +566,8 @@ app.whenReady().then(async () => {
 			data.x - dragOffsetX,
 			data.y - dragOffsetY
 		);
+
+		reflectionWindow.focus();
 	});
 
 	ipcMain.on("drag-end", () => {
