@@ -64,6 +64,14 @@ function createWindow() {
   	win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
 	win.loadFile(path.join(__dirname, "index.html"));
+
+
+	function close() {
+		process.exit();
+	}
+
+	win.on("close", close)
+	win2.on("close", close)
 }
 
 let dragging = false;

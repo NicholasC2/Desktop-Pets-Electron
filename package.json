@@ -1,6 +1,6 @@
 {
   "name": "fl-dance-electron",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "FL dance but made in electron.",
   "main": "main.js",
   "type": "commonjs",
