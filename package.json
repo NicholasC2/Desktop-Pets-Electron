@@ -4,33 +4,33 @@
   "description": "FL dance but made in electron.",
   "main": "main.js",
   "type": "commonjs",
-
   "scripts": {
     "dev": "electron .",
     "build": "electron-builder"
   },
-
   "build": {
     "appId": "com.nicholasc2.fl-dance",
     "productName": "FL Dance",
-
     "win": {
       "target": "portable"
     },
-
     "linux": {
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     },
-
     "mac": {
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
-
     "icon": "icon.png"
   },
-
   "devDependencies": {
     "electron": "^42.2.0",
     "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "unzipper": "^0.12.3"
   }
 }

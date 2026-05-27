@@ -1,249 +1,137 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<style>
-		@keyframes animate {
-			0%   { background-position-x: 0; }
-			100% { background-position-x: -1540px; }
-		}
+    <head>
+        <style>
+            html,
+            head,
+            body {
+                margin:0;
+                padding:0;
+                width: 100%;
+                height: 100%;
 
-		html, body {
-			margin: 0;
-			padding: 0;
-			width: 100%;
-			height: 100%;
-			background: transparent;
-			overflow: auto;
+                overflow: hidden;
 
-			font-family: Arial, Helvetica, sans-serif;
-		}
+                font-family: Arial, Helvetica, sans-serif;
+            }
 
-		#container {
-			width: 220px;
-			height: 256px;
-			position: relative;
+            * {
+                pointer-events: none;
+                user-select: none;
+            }
 
-			background-image: url("Dance_Large.png");
-			background-repeat: no-repeat;
+            .main-content {
+                background: rgba(50, 50, 50, 0.5);
+                background-repeat: no-repeat;
+                color: white;
+                width: 100%;
+                height: 100%;
+                text-align: center;
+                display: flex;
+                justify-content: center;
+                align-items: center;
 
-			filter: drop-shadow(0px 0px 5px black);
+                filter: drop-shadow(0 0 2px black);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="main-content">
+            Pet not loaded.
+        </div>
 
-			cursor: grab;
+        <script>
+            const { ipcRenderer } = require("electron");
 
-			animation-name: animate;
-			animation-timing-function: steps(7);
-			animation-duration: 1s;
-			animation-iteration-count: infinite;
+            window.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
 
-			--fade: 0.3;
-		}
+                ipcRenderer.send("open-menu", {
+                    x: e.screenX,
+                    y: e.screenY
+                });
+            });
 
-		#container:active {
-			cursor: grabbing;
-		}
+            function runUpdate() {
+                updateBackgroundPos();
 
-		#options-menu {
-			flex-direction: column;
+                setTimeout(runUpdate, (60000 / updateBPM) / frames);
+            }
 
-			align-items: flex-start;
+            let updateBackgroundPos = ()=>{}
+            let frameWidth = 0;
+            let bgX = 0;
 
-			position: absolute;
+            let updateBPM = 60
 
-			top: 0;
-			left: 0;
+            let frames = 0;
 
-			background: rgba(46, 46, 46, 0.75);
-			border-radius: 2px;
-			border: 2px black solid;
+            runUpdate();
 
-			color: white;
+            ipcRenderer.on("set-animation-speed", (e, bpm) => {
+                updateBPM = bpm;
+            })
 
-			width: 100%;
+            ipcRenderer.on("set-animation", (e, animation, width) => {
+                const content = document.querySelector(".main-content");
 
-			box-sizing: border-box;
+                content.innerHTML = "";
 
-			padding: 5px;
-		}
-		
-		#options-menu * {
-			margin: 5px;
+                content.style.background = "none";
+                content.style.backgroundImage = `url(${animation})`;
 
-			filter: drop-shadow(0 0 2px black);
-		}
+                const img = new Image();
+                img.src = animation;
 
-		input[type="range"] {
-			-webkit-appearance: none;
-			appearance: none;
+                img.onload = () => {
+                    frames = width;
 
-			height: 3px;
+                    frameWidth = img.width / frames;
 
-			background: #2a2a2a;
-			border-radius: 3px;
-			outline: none;
-		}
+                    content.style.width = frameWidth + "px";
+                    content.style.height = img.height + "px";
 
-		input[type="range"]::-webkit-slider-thumb {
-			-webkit-appearance: none;
-			appearance: none;
+                    bgX = 0;
 
-			width: 12px;
-			height: 12px;
+                    ipcRenderer.send("set-size", frameWidth, img.height);
 
-			background: rgb(255, 196, 86);
-			filter: drop-shadow(0 0 2px black);
+                    updateBackgroundPos = () => {
+                        bgX -= frameWidth;
 
-			border-radius: 50%;
-			cursor: pointer;
-		}
+                        if (bgX <= -img.width) {
+                            bgX = 0;
+                        }
 
-		input[type="range"]::-webkit-slider-thumb:hover {
-			background: rgb(194, 126, 0);
-		}
+                        content.style.backgroundPosition = `${bgX}px 0px`;
 
-		.row {
-			display: flex;
-			flex-direction: row;
-			justify-content: center;
-			align-items: center;
-
-		}
-	</style>
-</head>
-
-<body>
-
-	<div id="container"></div>
-
-	<div id="options-menu" style="display:none;">
-		<label>Reflect</label>
-		<div class="row">
-			<input id="reflectSlider" type="range" min="0" max="1" step="0.01" value="0.3">
-			<label id="reflectValue"></label>
-		</div>
-		<label>Animation Speed</label>
-		<div class="row">
-			<input id="speedSlider" type="range" min="0.1" max="2" step="0.1" value="1">
-			<label id="speedValue"></label>s
-		</div>
-	</div>
+                        ipcRenderer.send("set-animation-pos", bgX)
+                    };
+                };
+            });
 
-	<script>
-		const { ipcRenderer } = require("electron");
+            let isDragging = false;
 
-		const container = document.querySelector("#container");
+            window.addEventListener("mousedown", (e) => {
+                if(e.button !== 0) return;
 
-		const reflectSlider = document.querySelector("#reflectSlider");
-		const speedSlider = document.querySelector("#speedSlider")
+                isDragging = true;
 
-		function syncState(anim = null, reset = false) {
-			ipcRenderer.send("reflect-state", {
-				animation: anim == null ? animation : anim,
-				speed: speedSlider.value,
-				reflect: reflectSlider.value,
-				reset
-			});
-		}
+                ipcRenderer.send("drag-start");
+            });
 
-		reflectSlider.addEventListener("input", ()=>{
-			syncState();
-		})
+            window.addEventListener("mousemove", (e) => {
+                if (!isDragging) return;
 
-		speedSlider.addEventListener("input", ()=>{
-			container.style.animationDuration = speedSlider.value+"s"
+                ipcRenderer.send("drag-move", {
+                    x: e.screenX,
+                    y: e.screenY
+                });
+            });
 
-			syncState();
-		})
-
-		const optionsMenu = document.getElementById("options-menu")
-		
-		const sliders = [reflectSlider, speedSlider];
-
-		sliders.forEach((slider) => {
-			const valueLabel = document.getElementById(
-				slider.id.replace("Slider", "Value")
-			);
-
-			const stepDecimals = (() => {
-				const step = slider.step;
-				if (!step.includes(".")) return 0;
-				return step.split(".")[1].length;
-			})();
-
-			function update() {
-				const val = parseFloat(slider.value);
-
-				if (valueLabel) {
-					valueLabel.textContent = val.toFixed(stepDecimals);
-				}
-			}
-
-			update();
-			slider.addEventListener("input", update);
-		});
-
-		let animation = 0;
-		let dragging = false;
-
-		container.addEventListener("mousedown", (e) => {
-			if (e.button !== 0) return;
-
-			dragging = true;
-			
-			setAnimation(9)
-
-			ipcRenderer.send("drag-start", {
-				x: e.screenX,
-				y: e.screenY
-			});
-		});
-
-		window.addEventListener("mousemove", (e) => {
-
-			if (!dragging) return;
-
-			ipcRenderer.send("drag-move", {
-				x: e.screenX,
-				y: e.screenY
-			});
-		});
-
-		function setAnimation(animation) {
-			container.style.backgroundPositionY = -256 * animation + "px";
-
-			container.style.animationName = "none";
-
-			container.style.animationName = `animate`;
-
-			syncState(animation, true);
-		}
-
-		window.addEventListener("mouseup", () => {
-
-			if (!dragging) return;
-
-			dragging = false;
-
-			setAnimation(animation)
-
-			ipcRenderer.send("drag-end");
-		});
-
-		window.addEventListener("contextmenu", (e) => {
-			e.preventDefault();
-			ipcRenderer.send("show-context-menu");
-		});
-
-		ipcRenderer.on("set-animation", (e, i) => {
-			animation = i;
-			if (!dragging) {
-				setAnimation(animation)
-			}
-		});
-
-		ipcRenderer.on("toggle-options", (e, i) => {
-			optionsMenu.style.display = optionsMenu.style.display == "flex" ? "none" : "flex";
-		})
-	</script>
-
-</body>
+            window.addEventListener("mouseup", () => {
+                isDragging = false;
+                ipcRenderer.send("drag-end");
+            });
+        </script>
+    </body>
 </html>

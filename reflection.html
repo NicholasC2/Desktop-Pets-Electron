@@ -1,73 +1,91 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<style>
-		@keyframes animate {
-			0%   { background-position-x: 0; }
-			100% { background-position-x: -1540px; }
-		}
+    <head>
+        <style>
+            html,
+            head,
+            body {
+                margin:0;
+                padding:0;
+                width: 100%;
+                height: 100%;
 
-		html, body {
-			margin: 0;
-			padding: 0;
-			width: 100%;
-			height: 100%;
-			background: transparent;
-			overflow: auto;
+                overflow: hidden;
 
-			font-family: Arial, Helvetica, sans-serif;
-
-			pointer-events: none;
-			-webkit-app-region: no-drag;
-		}
-
-		#container {
-			width: 220px;
-			height: 256px;
-			position: relative;
-
-            background: url("Dance_Large.png");
-			background-repeat: no-repeat;
-            
-			animation-name: animate;
-			animation-timing-function: steps(7);
-			animation-duration: 1s;
-			animation-iteration-count: infinite;
-
-			filter: drop-shadow(0px 0px 5px black);
-
-			--fade: 0.3;
-			
-			transform: scaleY(-1);
-
-			mask-image: linear-gradient(
-				to top,
-				rgba(0,0,0,var(--fade)) 0%,
-				rgba(0,0,0,0) calc(var(--fade) * 100%)
-			);
-		}
-	</style>
-</head>
-
-<body>
-
-	<div id="container"></div>
-
-	<script>
-		const { ipcRenderer } = require("electron");
-
-		const container = document.querySelector("#container");
-
-        ipcRenderer.on("reflect-state", (e, i) => {
-			container.style.setProperty("--fade", i.reflect)
-            container.style.animationDuration = i.speed+"s";
-			container.style.backgroundPositionY = -256 * i.animation + "px";
-            if(i.reset) {
-                container.style.animationName = "none";
-                container.style.animationName = `animate`;
+                font-family: Arial, Helvetica, sans-serif;
             }
-        })
-	</script>
 
-</body>
+            * {
+                pointer-events: none;
+                user-select: none;
+            }
+
+            .main-content {
+                background: black;
+                background-repeat: no-repeat;
+                color: white;
+                width: 100%;
+                height: 100%;
+                text-align: center;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                transform: scaleY(-1);
+
+			    --fade: 0.3;
+
+                mask-image: linear-gradient(
+                    to top,
+                    rgba(0,0,0,var(--fade)) 0%,
+                    rgba(0,0,0,0) calc(var(--fade) * 100%)
+                );
+
+                filter: drop-shadow(0 0 2px black);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="main-content">
+
+        </div>
+
+        <script>
+            const { ipcRenderer } = require("electron");
+
+            let frameWidth = 0;
+
+            ipcRenderer.on("set-animation", (e, animation, width) => {
+                const content = document.querySelector(".main-content");
+
+                content.innerHTML = "";
+
+                content.style.background = "none";
+                content.style.backgroundImage = `url(${animation})`;
+
+                const img = new Image();
+                img.src = animation;
+
+                img.onload = () => {
+                    frameWidth = img.width / width;
+
+                    content.style.width = frameWidth + "px";
+                    content.style.height = img.height + "px";
+
+                    ipcRenderer.send("set-size", frameWidth, img.height);
+                };
+            });
+
+            ipcRenderer.on("set-animation-pos", (e, pos) => {
+                const content = document.querySelector(".main-content");
+
+                content.style.backgroundPosition = `${pos}px 0px`;
+            })
+
+            ipcRenderer.on("set-animation-reflection", (e, reflection) => {
+                const content = document.querySelector(".main-content");
+
+			    content.style.setProperty("--fade", reflection);
+            })
+        </script>
+    </body>
 </html>
