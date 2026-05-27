@@ -144,6 +144,7 @@ function setReflectionPos() {
 		x,
 		y + h - (petManifest?.reflectionOffset ?? 0)
 	);
+	reflectionWindow.focus() // fixes getting stuck behind taskbar I think
 }
 
 async function loadPet(filePath) {
