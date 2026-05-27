@@ -65,6 +65,16 @@ function createWindow() {
 
 	win.loadFile(path.join(__dirname, "index.html"));
 
+	win.webContents.on("before-input-event", (event, input) => {
+	const key = input.key?.toLowerCase();
+
+	if (
+		(input.control && (key === "=" || key === "-")) ||
+		(input.meta && (key === "=" || key === "-"))
+	) {
+		event.preventDefault();
+	}
+	});
 
 	function close() {
 		process.exit();
