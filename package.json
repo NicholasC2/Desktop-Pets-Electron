@@ -12,6 +12,15 @@
   "build": {
     "appId": "com.nicholasc2.desktop-pets",
     "productName": "Desktop Pets",
+
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "icon.png",
+      "windowContents/**"
+    ],
+    
     "win": {
       "target": "portable"
     },
