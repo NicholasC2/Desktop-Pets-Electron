@@ -14,7 +14,7 @@
     "appId": "com.nicholasc2.desktop-pets",
     "productName": "Desktop Pets",
     "files": [
-      "dist/**/*",
+      "dist/**/*.js",
       "html/**"
     ],
     "win": {
