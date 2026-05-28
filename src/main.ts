@@ -50,7 +50,7 @@ function showError(html = ""): BrowserWindow {
 		}
 	});
 
-	errorWindow.loadFile(path.join(__dirname, "../windowContents/error.html"));
+	errorWindow.loadFile(path.join(__dirname, "../html/error.html"));
 
 	errorWindow.webContents.on("did-finish-load", () => {
 		if (!errorWindow || errorWindow.isDestroyed()) return;
@@ -80,7 +80,7 @@ function openMenu(x: number, y: number, html = "") {
 		}
 	});
 
-	menuWindow.loadFile(path.join(__dirname, "../windowContents/menu.html"));
+	menuWindow.loadFile(path.join(__dirname, "../html/menu.html"));
 
 	menuWindow.webContents.on("did-finish-load", () => {
 		if (!menuWindow || menuWindow.isDestroyed()) return;
@@ -228,18 +228,11 @@ ipcMain.on("menu-height", (event, height) => {
 ipcMain.on("click", async (e, i) => {
 	if(!mainWindow || mainWindow.isDestroyed()) return;
 
-	if (
-		i.elem === "menu" ||
-		i.elem === "row" ||
-		i.elem.endsWith("-slider") ||
-		i.elem.endsWith("-label")
-	) {
-		return;
+	if (i.elem == "submit") {
+		safeCloseMenu();
 	}
 
-	safeCloseMenu();
-
-	if (i.elem === "set-pet") {
+	if (i.class === "set-pet") {
 		const result = await dialog.showOpenDialog(
 			mainWindow,
 			{
@@ -269,11 +262,11 @@ ipcMain.on("click", async (e, i) => {
 		}
 	}
 
-	if (i.elem === "reset") {
+	if (i.class === "reset") {
 		resetPet();
 	}
 
-	if (i.elem === "quit") {
+	if (i.class === "quit") {
 		app.quit();
 	}
 });
@@ -335,11 +328,11 @@ app.whenReady().then(async () => {
 	);
 
 	mainWindow.loadFile(
-		path.join(__dirname, "../windowContents/index.html")
+		path.join(__dirname, "../html/index.html")
 	);
 
 	reflectionWindow.loadFile(
-		path.join(__dirname, "../windowContents/reflection.html")
+		path.join(__dirname, "../html/reflection.html")
 	);
 
 	mainWindow.on("close", () => {
@@ -407,6 +400,29 @@ app.whenReady().then(async () => {
 	);
 
 	ipcMain.on(
+		"setRememberWindowPos",
+		(e, value)=>{
+			if(value) {
+				if(!mainWindow || mainWindow.isDestroyed()) return;
+
+				const [x, y] = mainWindow.getPosition();
+				store.set("windowPos", {x, y})
+			} else {
+				store.delete("windowPos")
+			}
+		}
+	)
+
+	ipcMain.on(
+		"setAutoStart",
+		(e, value)=> {
+			app.setLoginItemSettings({
+				openAtLogin: value
+			});
+		}
+	)
+
+	ipcMain.on(
 		"open-menu",
 		(event, { x, y }) => {
 			let i = 0;
@@ -434,7 +450,7 @@ app.whenReady().then(async () => {
 
 					<hr>
 
-					Animation Speed
+					Animation Speed (BPM)
 
 					<div class="row">
 						<input
@@ -447,17 +463,15 @@ app.whenReady().then(async () => {
 							oninput="setAnimationSpeed(this.value)"
 						>
 
-						<div class="row">
-							<input 
-								class="animation-speed-label"
-								type="number"
-								min="20"
-								max="300"
-								value="${animationSpeed}"
-								onblur="setAnimationSpeed(this.value)"
-								onkeydown="if(event.key==='Enter') this.blur()"
-							>BPM
-						</div>
+						<input 
+							class="animation-speed-label"
+							type="number"
+							min="20"
+							max="300"
+							value="${animationSpeed}"
+							onblur="setAnimationSpeed(this.value)"
+							onkeydown="if(event.key==='Enter') this.blur()"
+						>
 					</div>
 
 					<hr>
@@ -484,6 +498,18 @@ app.whenReady().then(async () => {
 							onblur="setReflect(this.value)"
 							onkeydown="if(event.key==='Enter') this.blur()"
 						>
+					</div>
+
+					<hr>
+
+					<div class="row">
+    					<span>Remember Window Position</span>
+						<input type="checkbox" oninput="setRememberWindowPos(this.checked)" ${store.get("windowPos") != null ? "checked" : ""}>
+					</div>
+
+					<div class="row">
+    					<span>Auto Start</span>
+						<input type="checkbox" oninput="setAutoStart(this.checked)" ${app.getLoginItemSettings().openAtLogin ? "checked" : ""}>
 					</div>
 				`
 				}
@@ -544,6 +570,12 @@ app.whenReady().then(async () => {
 
 		if(!window || window.isDestroyed()) return;
 
+		const [x, y] = window.getPosition();
+
+		if(store.get("windowPos")) {
+			store.set("windowPos", {x, y})
+		}
+
 		if(pet?.holdingAnimation) {
 			window.webContents.send("set-animation", pet.animations[currentAnimation])
 			if(reflectionWindow && !reflectionWindow.isDestroyed()) {
@@ -583,9 +615,27 @@ app.whenReady().then(async () => {
 		pet = new Pet(petData.animations.map(a=>new Animation(a.url, a.name, a.width)), holdingAnimation, petData.reflectionOffset);
 	}
 
+	type WindowPos = {
+		x: number;
+		y: number;
+	};
+
 	const reflectionSaved = store.get("reflection");
 	const speed = store.get("speed");
 	const animation = store.get("animation");
+	const windowPos = store.get("windowPos");
+
+	if (
+    	windowPos &&
+		typeof windowPos === "object" &&
+		"x" in windowPos &&
+		"y" in windowPos &&
+		typeof (windowPos as any).x === "number" &&
+		typeof (windowPos as any).y === "number"
+	) {
+		const pos = windowPos as WindowPos;
+		mainWindow?.setPosition(pos.x, pos.y);
+	}
 
 	if (typeof reflectionSaved == "number") {
 		setReflection(reflectionSaved);

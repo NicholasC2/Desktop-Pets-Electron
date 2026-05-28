@@ -4,7 +4,7 @@
     gap: 10px;
 }
 
-.row > * {
+.row span {
     flex: 1;
 }
 
@@ -18,6 +18,8 @@ input[type="range"] {
     border-radius: 0;
 
     background: orange;
+
+    flex: 1;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -45,6 +47,8 @@ input[type="number"] {
     outline: none;
     border: none;
     background: transparent;
+
+    flex: 1;
 }
 
 input[type="number"]:active {
@@ -55,6 +59,24 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
 	-webkit-appearance: none;
 	margin: 0;
+}
+
+input[type="checkbox"] {
+    appearance: none;
+
+    width: 16px !important;
+    height: 16px;
+
+    border: 1px solid orange;
+    border-radius: 2px;
+
+    cursor: pointer;
+
+    background: transparent;
+}
+
+input[type="checkbox"]:checked {
+    background: orange;
 }
 
 button {
@@ -68,6 +90,8 @@ button {
     color: orange;
 
     cursor: pointer;
+
+    flex: 1;
 }
 
 button:hover {

@@ -48,9 +48,18 @@
             ipcRenderer.send("click", {
                 x: e.clientX,
                 y: e.clientY,
-                elem: e.target.className || ""
+                class: e.target.className || "",
+                elem: e.target.type
             });
         });
+
+        function setRememberWindowPos(value) {
+            ipcRenderer.send("setRememberWindowPos", value);
+        }
+
+        function setAutoStart(value) {
+            ipcRenderer.send("setAutoStart", value);
+        }
 
         function setAnimation(animation, width) {
             ipcRenderer.send("set-animation", animation, width);
