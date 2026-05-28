@@ -473,46 +473,46 @@ app.whenReady().then(async () => {
 							onkeydown="if(event.key==='Enter') this.blur()"
 						>
 					</div>
-
-					<hr>
-
-					Reflect
-
-					<div class="row">
-						<input
-							class="reflect-slider"
-							type="range"
-							min="0"
-							max="1"
-							step="0.01"
-							value="${reflection}"
-							oninput="setReflect(this.value)"
-						>
-
-						<input 
-							class="reflect-label"
-							min="0"
-							max="1"
-							type="number"
-							value="${reflection}"
-							onblur="setReflect(this.value)"
-							onkeydown="if(event.key==='Enter') this.blur()"
-						>
-					</div>
-
-					<hr>
-
-					<div class="row">
-    					<span>Remember Window Position</span>
-						<input type="checkbox" oninput="setRememberWindowPos(this.checked)" ${store.get("windowPos") != null ? "checked" : ""}>
-					</div>
-
-					<div class="row">
-    					<span>Auto Start</span>
-						<input type="checkbox" oninput="setAutoStart(this.checked)" ${app.getLoginItemSettings().openAtLogin ? "checked" : ""}>
-					</div>
 				`
-				}
+				}				
+
+				<hr>
+
+				Reflect
+
+				<div class="row">
+					<input
+						class="reflect-slider"
+						type="range"
+						min="0"
+						max="1"
+						step="0.01"
+						value="${reflection}"
+						oninput="setReflect(this.value)"
+					>
+
+					<input 
+						class="reflect-label"
+						min="0"
+						max="1"
+						type="number"
+						value="${reflection}"
+						onblur="setReflect(this.value)"
+						onkeydown="if(event.key==='Enter') this.blur()"
+					>
+				</div>
+
+				<hr>
+
+				<div class="row">
+    				<span>Remember Window Position</span>
+					<input type="checkbox" oninput="setRememberWindowPos(this.checked)" ${store.get("windowPos") != null ? "checked" : ""}>
+				</div>
+
+				<div class="row">
+    				<span>Auto Start</span>
+					<input type="checkbox" oninput="setAutoStart(this.checked)" ${app.getLoginItemSettings().openAtLogin ? "checked" : ""}>
+				</div>
 
 				<hr>
 
@@ -654,4 +654,6 @@ app.whenReady().then(async () => {
 	} else {
 		store.delete("animation")
 	}
+
+	setReflectionPos();
 });
