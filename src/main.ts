@@ -1,22 +1,19 @@
-const { BrowserWindow, app, ipcMain, dialog, screen } = require("electron");
+import { BrowserWindow, app, ipcMain, dialog, screen } from "electron";
 const Store = require("electron-store");
 const path = require("path");
-const unzipper = require("unzipper");
+const { Pet } = require("./pets.js");
 
 const store = new Store.default();
 
-let menuWindow = null;
-let mainWindow = null;
-let reflectionWindow = null;
+let menuWindow: BrowserWindow | null;
+let mainWindow: BrowserWindow | null;
+let reflectionWindow: BrowserWindow | null;
 
-let petAnimations = [];
-let petManifest = null;
-let holdingAnimation = null;
+let pet;
+let currentAnimation = 0;
 
 let animationSpeed = 60;
 let reflect = 0.3;
-
-let currentAnimation = {};
 
 let isDragging = false;
 let dragOffsetX = 0;
@@ -28,6 +25,38 @@ function safeCloseMenu() {
 	menuWindow.removeAllListeners("blur");
 	menuWindow.close();
 	menuWindow = null;
+}
+
+function showError(html = ""): BrowserWindow {
+	const pos = mainWindow?.getPosition();
+
+	if(!pos) throw new Error("Main Window not defined");
+
+	let errorWindow = new BrowserWindow({
+		width: 200,
+		height: 1,
+		x: pos[0],
+		y: pos[1],
+		transparent: true,
+		frame: false,
+		alwaysOnTop: true,
+		resizable: false,
+		focusable: true,
+		webPreferences: {
+			nodeIntegration: true,
+			contextIsolation: false
+		}
+	});
+
+	errorWindow.loadFile(path.join(__dirname, "error.html"));
+
+	errorWindow.webContents.send("menu-content", html);
+
+	errorWindow.on("blur", () => {
+		errorWindow.close();
+	});
+
+	return errorWindow;
 }
 
 function openMenu(x, y, html = "") {
@@ -147,97 +176,9 @@ function setReflectionPos() {
 }
 
 async function loadPet(filePath) {
-	const [x, y] = mainWindow.getPosition();
-
-	const directory = await unzipper.Open.file(filePath);
-
-	petAnimations = [];
-	petManifest = null;
-	holdingAnimation = null;
-
-	const imageMap = {};
-
-	const tasks = directory.files.map(async (file) => {
-		if (file.path.endsWith("manifest.json")) {
-			try {
-				const parsedManifest = JSON.parse(
-					(await file.buffer()).toString("utf8")
-				);
-
-				if (Array.isArray(parsedManifest.animations)) {
-					petManifest = parsedManifest;
-
-					const menu = openMenu(x, y, "Pet Loaded!");
-
-					setTimeout(() => {
-						if (!menu || menu.isDestroyed()) return;
-
-						menu.removeAllListeners("blur");
-						menu.close();
-
-						if (menu === menuWindow) {
-							menuWindow = null;
-						}
-					}, 1000);
-				}
-			} catch {
-				openMenu(x, y, "Invalid Manifest!");
-			}
-
-			return;
-		}
-
-		const ext = file.path
-			.split(".")
-			.at(-1)
-			.toLowerCase();
-
-		if (["png", "jpg", "jpeg"].includes(ext)) {
-			const mime = ext === "jpg" ? "jpeg" : ext;
-
-			const buffer = await file.buffer();
-
-			imageMap[file.path] =
-				`data:image/${mime};base64,${buffer.toString("base64")}`;
-		}
-	});
-
-	await Promise.all(tasks);
-
-	if (petManifest?.animations) {
-		petAnimations = petManifest.animations.map((anim) => ({
-			name: anim.name,
-			url: imageMap[anim.path] || null,
-			width: anim.width
-		}));
-	}
-
-	if (petManifest?.holdingAnimation) {
-		holdingAnimation = {
-			name: petManifest.holdingAnimation.name,
-			url:
-				imageMap[
-					petManifest.holdingAnimation.path
-				] || null,
-			width: petManifest.holdingAnimation.width
-		};
-	}
-
-	const savedAnimation = store.get("animation");
-	const savedAnimationWidth =
-		store.get("animationWidth");
-
-	if (savedAnimation && savedAnimationWidth) {
-		sendAnimation(
-			savedAnimation,
-			savedAnimationWidth
-		);
-	} else if (petAnimations[0]) {
-		sendAnimation(
-			petAnimations[0].url,
-			petAnimations[0].width
-		);
-	}
+	try {
+		pet = Pet.fromFile(filePath);
+	} catch {}
 }
 
 ipcMain.on("menu-height", (event, height) => {
