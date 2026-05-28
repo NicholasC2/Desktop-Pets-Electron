@@ -15,10 +15,7 @@
 
     "files": [
       "dist/**/*",
-      "node_modules/**/*",
-      "package.json",
-      "icon.png",
-      "windowContents/**"
+      "html/**"
     ],
     
     "win": {
