@@ -447,15 +447,17 @@ app.whenReady().then(async () => {
 							oninput="setAnimationSpeed(this.value)"
 						>
 
-						<input 
-						 	class="animation-speed-label"
-							type="number"
-							min="20"
-							max="300"
-							value="${animationSpeed}"
-							onblur="setAnimationSpeed(this.value)"
-							onkeydown="if(event.key==='Enter') this.blur()"
-						>
+						<div class="row">
+							<input 
+								class="animation-speed-label"
+								type="number"
+								min="20"
+								max="300"
+								value="${animationSpeed}"
+								onblur="setAnimationSpeed(this.value)"
+								onkeydown="if(event.key==='Enter') this.blur()"
+							>BPM
+						</div>
 					</div>
 
 					<hr>
