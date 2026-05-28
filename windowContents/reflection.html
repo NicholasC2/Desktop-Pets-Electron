@@ -69,16 +69,16 @@
 
         ipcRenderer.on("reset-animation", resetAnimation);
 
-        ipcRenderer.on("set-animation", (e, animation, frameCount) => {
+        ipcRenderer.on("set-animation", (e, animation = {url: "", name: "", width: 0}) => {
             content.style.background = "none";
-            content.style.backgroundImage = `url(${animation})`;
+            content.style.backgroundImage = `url(${animation.url})`;
             content.style.backgroundPosition = "0px 0px";
 
             const img = new Image();
-            img.src = animation;
+            img.src = animation.url;
 
             img.onload = () => {
-                const frameWidth = img.width / frameCount;
+                const frameWidth = img.width / animation.width;
 
                 content.style.width = `${frameWidth}px`;
                 content.style.height = `${img.height}px`;

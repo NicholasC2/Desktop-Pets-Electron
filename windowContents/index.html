@@ -122,20 +122,19 @@
             );
         }
 
-        function setAnimation(animation, width) {
+        function setAnimation(animation = {url: "", name: "", width: 0}) {
             content.innerHTML = "";
 
             content.style.background = "none";
 
-            content.style.backgroundImage =
-                `url(${animation})`;
+            content.style.backgroundImage = `url(${animation.url})`;
 
             const img = new Image();
 
-            img.src = animation;
+            img.src = animation.url;
 
             img.onload = () => {
-                frames = width;
+                frames = animation.width;
 
                 frameWidth = img.width / frames;
 

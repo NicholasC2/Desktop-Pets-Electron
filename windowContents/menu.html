@@ -57,20 +57,34 @@
         }
 
         function setAnimationSpeed(speed) {
+            speed = Math.min(Math.max(speed,20),300)
+
+            const slider = document.querySelector(".animation-speed-slider");
             const label = document.querySelector(".animation-speed-label");
 
+            if (slider) {
+                slider.value = speed;
+            }
+
             if (label) {
-                label.textContent = `${speed} BPM`;
+                label.value = speed;
             }
 
             ipcRenderer.send("set-animation-speed", Number(speed));
         }
 
         function setReflect(reflect) {
+            reflect = Math.min(Math.max(reflect,0),1)
+
+            const slider = document.querySelector(".reflect-slider");
             const label = document.querySelector(".reflect-label");
 
+            if (slider) {
+                slider.value = reflect;
+            }
+
             if (label) {
-                label.textContent = reflect;
+                label.value = reflect;
             }
 
             ipcRenderer.send(

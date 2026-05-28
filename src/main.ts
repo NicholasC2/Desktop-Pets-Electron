@@ -1,19 +1,20 @@
 import { BrowserWindow, app, ipcMain, dialog, screen } from "electron";
-const Store = require("electron-store");
-const path = require("path");
-const { Pet } = require("./pets.js");
+import { Animation, Pet } from "./pets";
+import Store from "electron-store"
+import path from "path";
 
-const store = new Store.default();
+const store = new Store();
 
 let menuWindow: BrowserWindow | null;
 let mainWindow: BrowserWindow | null;
 let reflectionWindow: BrowserWindow | null;
 
-let pet;
+let pet: Pet | null;
 let currentAnimation = 0;
+let holding = false;
 
 let animationSpeed = 60;
-let reflect = 0.3;
+let reflection = 0.3;
 
 let isDragging = false;
 let dragOffsetX = 0;
@@ -29,14 +30,15 @@ function safeCloseMenu() {
 
 function showError(html = ""): BrowserWindow {
 	const pos = mainWindow?.getPosition();
+	const size = mainWindow?.getSize();
 
-	if(!pos) throw new Error("Main Window not defined");
+	if(!pos || !size) throw new Error("Main Window not defined");
 
 	let errorWindow = new BrowserWindow({
-		width: 200,
+		width: size[0],
 		height: 1,
 		x: pos[0],
-		y: pos[1],
+		y: pos[1] + (size[1] / 2),
 		transparent: true,
 		frame: false,
 		alwaysOnTop: true,
@@ -48,18 +50,18 @@ function showError(html = ""): BrowserWindow {
 		}
 	});
 
-	errorWindow.loadFile(path.join(__dirname, "error.html"));
+	errorWindow.loadFile(path.join(__dirname, "../windowContents/error.html"));
 
-	errorWindow.webContents.send("menu-content", html);
+	errorWindow.webContents.on("did-finish-load", () => {
+		if (!errorWindow || errorWindow.isDestroyed()) return;
 
-	errorWindow.on("blur", () => {
-		errorWindow.close();
+		errorWindow.webContents.send("menu-content", html);
 	});
 
 	return errorWindow;
 }
 
-function openMenu(x, y, html = "") {
+function openMenu(x: number, y: number, html = "") {
 	safeCloseMenu();
 
 	menuWindow = new BrowserWindow({
@@ -78,7 +80,7 @@ function openMenu(x, y, html = "") {
 		}
 	});
 
-	menuWindow.loadFile(path.join(__dirname, "menu.html"));
+	menuWindow.loadFile(path.join(__dirname, "../windowContents/menu.html"));
 
 	menuWindow.webContents.on("did-finish-load", () => {
 		if (!menuWindow || menuWindow.isDestroyed()) return;
@@ -93,29 +95,30 @@ function openMenu(x, y, html = "") {
 	return menuWindow;
 }
 
-function sendAnimation(animation, width) {
-	if (!mainWindow || !reflectionWindow) return;
+function setAnimation(animation: number) {
+	if (!mainWindow || !reflectionWindow || !pet) return;
+
+	const selectedAnimation = pet.animations[animation];
+
+	if (!selectedAnimation) return;
 
 	mainWindow.webContents.send(
 		"set-animation",
-		animation,
-		width
+		selectedAnimation
 	);
 
 	reflectionWindow.webContents.send(
 		"set-animation",
-		animation,
-		width
+		selectedAnimation
 	);
 
-	currentAnimation = { animation, width };
+	currentAnimation = animation;
 
 	store.set("animation", animation);
-	store.set("animationWidth", width);
 }
 
-function setAnimationSpeed(speed) {
-	animationSpeed = Number(speed);
+function setAnimationSpeed(value: number) {
+	animationSpeed = value;
 
 	store.set("speed", animationSpeed);
 
@@ -125,32 +128,29 @@ function setAnimationSpeed(speed) {
 	);
 }
 
-function setReflection(value) {
-	reflect = Number(value);
+function setReflection(value: number) {
+	reflection = value;
 
-	store.set("reflection", reflect);
+	store.set("reflection", reflection);
 
 	reflectionWindow?.webContents.send(
 		"set-animation-reflection",
-		reflect
+		reflection
 	);
 }
 
 function resetPet() {
-	store.delete("petPath");
+	store.delete("pet");
 	store.delete("animation");
-	store.delete("animationWidth");
 	store.delete("reflection");
 	store.delete("speed");
 
-	reflect = 0.3;
+	reflection = 0.3;
 	animationSpeed = 60;
 
-	currentAnimation = {};
+	currentAnimation = 0;
 
-	petManifest = null;
-	petAnimations = [];
-	holdingAnimation = null;
+	pet = null;
 
 	mainWindow?.webContents.send("reset-animation");
 	reflectionWindow?.webContents.send("reset-animation");
@@ -171,23 +171,33 @@ function setReflectionPos() {
 
 	reflectionWindow.setPosition(
 		x,
-		y + h - (petManifest?.reflectionOffset ?? 0)
+		y + h - (pet?.reflectionOffset ?? 0)
 	);
 }
 
-async function loadPet(filePath) {
+async function loadPet(filePath: string) {
 	try {
-		pet = Pet.fromFile(filePath);
-	} catch {}
+		pet = await Pet.fromFile(filePath);
+		
+		currentAnimation = 0;
+
+		store.set("animation", currentAnimation);
+		store.set("pet", pet);
+	} catch(err) {
+		if(err instanceof Error) {
+			showError(err.toString())
+		}
+	}
 }
 
 ipcMain.on("menu-height", (event, height) => {
-	if (!menuWindow || menuWindow.isDestroyed()) return;
+	const window = BrowserWindow.fromWebContents(event.sender);
 
-	const bounds = menuWindow.getBounds();
+	if (!window || window.isDestroyed()) return;
 
-	const display =
-		screen.getDisplayNearestPoint(bounds);
+	const bounds = window.getBounds();
+
+	const display = screen.getDisplayNearestPoint(bounds);
 
 	const work = display.workArea;
 
@@ -208,7 +218,7 @@ ipcMain.on("menu-height", (event, height) => {
 
 	y = Math.max(work.y, y);
 
-	menuWindow.setBounds({
+	window.setBounds({
 		x,
 		y,
 		height: Math.ceil(height)
@@ -216,10 +226,13 @@ ipcMain.on("menu-height", (event, height) => {
 });
 
 ipcMain.on("click", async (e, i) => {
+	if(!mainWindow || mainWindow.isDestroyed()) return;
+
 	if (
 		i.elem === "menu" ||
 		i.elem === "row" ||
-		i.elem.endsWith("-slider")
+		i.elem.endsWith("-slider") ||
+		i.elem.endsWith("-label")
 	) {
 		return;
 	}
@@ -250,15 +263,9 @@ ipcMain.on("click", async (e, i) => {
 		);
 
 		if (!result.canceled) {
-			store.delete("animation");
-			store.delete("animationWidth");
-
-			store.set(
-				"petPath",
-				result.filePaths[0]
-			);
-
 			await loadPet(result.filePaths[0]);
+
+			setAnimation(currentAnimation);
 		}
 	}
 
@@ -328,11 +335,11 @@ app.whenReady().then(async () => {
 	);
 
 	mainWindow.loadFile(
-		path.join(__dirname, "index.html")
+		path.join(__dirname, "../windowContents/index.html")
 	);
 
 	reflectionWindow.loadFile(
-		path.join(__dirname, "reflection.html")
+		path.join(__dirname, "../windowContents/reflection.html")
 	);
 
 	mainWindow.on("close", () => {
@@ -349,6 +356,8 @@ app.whenReady().then(async () => {
 	ipcMain.on(
 		"set-size",
 		(e, width, height) => {
+			if(!mainWindow || mainWindow.isDestroyed() || !reflectionWindow || reflectionWindow.isDestroyed()) return;
+
 			width = Math.ceil(width);
 			height = Math.ceil(height);
 
@@ -366,8 +375,8 @@ app.whenReady().then(async () => {
 
 	ipcMain.on(
 		"set-animation",
-		(e, animation, width) => {
-			sendAnimation(animation, width);
+		(e, animation) => {
+			setAnimation(animation);
 		}
 	);
 
@@ -381,6 +390,8 @@ app.whenReady().then(async () => {
 	ipcMain.on(
 		"set-animation-pos",
 		(e, pos) => {
+			if(!reflectionWindow || reflectionWindow.isDestroyed()) return;
+
 			reflectionWindow?.webContents.send(
 				"set-animation-pos",
 				pos
@@ -398,6 +409,8 @@ app.whenReady().then(async () => {
 	ipcMain.on(
 		"open-menu",
 		(event, { x, y }) => {
+			let i = 0;
+
 			openMenu(
 				x,
 				y,
@@ -405,19 +418,18 @@ app.whenReady().then(async () => {
 				<button class='set-pet'>Set Pet</button>
 
 				${
-					petAnimations.length === 0
+					(!pet || pet?.animations.length === 0)
 						? ""
 						: `
 					<hr>
 
-					${petAnimations
+					${pet?.animations
 						.map(
-							(anim) => `
-						<button onclick='setAnimation("${anim.url}", ${anim.width})'>
+							(anim) => {i++; return`
+						<button onclick='setAnimation(${i-1})'>
 							${anim.name}
-						</button>
-					`
-						)
+						</button>`
+						})
 						.join("")}
 
 					<hr>
@@ -435,9 +447,15 @@ app.whenReady().then(async () => {
 							oninput="setAnimationSpeed(this.value)"
 						>
 
-						<span class="animation-speed-label">
-							${animationSpeed} BPM
-						</span>
+						<input 
+						 	class="animation-speed-label"
+							type="number"
+							min="20"
+							max="300"
+							value="${animationSpeed}"
+							onblur="setAnimationSpeed(this.value)"
+							onkeydown="if(event.key==='Enter') this.blur()"
+						>
 					</div>
 
 					<hr>
@@ -451,13 +469,19 @@ app.whenReady().then(async () => {
 							min="0"
 							max="1"
 							step="0.01"
-							value="${reflect}"
+							value="${reflection}"
 							oninput="setReflect(this.value)"
 						>
 
-						<span class="reflect-label">
-							${reflect}
-						</span>
+						<input 
+							class="reflect-label"
+							min="0"
+							max="1"
+							type="number"
+							value="${reflection}"
+							onblur="setReflect(this.value)"
+							onkeydown="if(event.key==='Enter') this.blur()"
+						>
 					</div>
 				`
 				}
@@ -477,67 +501,105 @@ app.whenReady().then(async () => {
 	);
 
 	ipcMain.on("drag-start", (e, data) => {
+		const window = BrowserWindow.fromWebContents(e.sender);
+
+		if(!window || window.isDestroyed()) return;
+
 		isDragging = true;
 
-		const [winX, winY] =
-			mainWindow.getPosition();
+		const [winX, winY] = window.getPosition();
 
 		dragOffsetX = data.mouseX - winX;
 		dragOffsetY = data.mouseY - winY;
 
-		if (holdingAnimation?.url) {
-			mainWindow.webContents.send(
-				"set-animation",
-				holdingAnimation.url,
-				holdingAnimation.width
-			);
-
-			reflectionWindow.webContents.send(
-				"set-animation",
-				holdingAnimation.url,
-				holdingAnimation.width
-			);
+		if(pet?.holdingAnimation) {
+			window.webContents.send("set-animation", pet.holdingAnimation)
+			if(reflectionWindow && !reflectionWindow.isDestroyed()) {
+				reflectionWindow.webContents.send("set-animation", pet.holdingAnimation)
+			}
 		}
 	});
 
 	ipcMain.on("drag-move", (e, data) => {
+		const window = BrowserWindow.fromWebContents(e.sender);
+		
+		if(!window || window.isDestroyed()) return;
+
 		if (!isDragging) return;
 
-		mainWindow.setPosition(
+		window.setPosition(
 			data.x - dragOffsetX,
 			data.y - dragOffsetY
 		);
 
-		reflectionWindow.focus();
+		if(reflectionWindow && !reflectionWindow.isDestroyed()) {
+			reflectionWindow.focus();
+		}
 	});
 
-	ipcMain.on("drag-end", () => {
-		if (holdingAnimation?.url) {
-			sendAnimation(
-				currentAnimation.animation,
-				currentAnimation.width
-			);
+	ipcMain.on("drag-end", (e) => {
+		const window = BrowserWindow.fromWebContents(e.sender);
+
+		if(!window || window.isDestroyed()) return;
+
+		if(pet?.holdingAnimation) {
+			window.webContents.send("set-animation", pet.animations[currentAnimation])
+			if(reflectionWindow && !reflectionWindow.isDestroyed()) {
+				reflectionWindow.webContents.send("set-animation", pet.animations[currentAnimation])
+			}
 		}
 
 		isDragging = false;
 	});
 
-	const petPath = store.get("petPath");
+	type AnimationData = {
+		name: string;
+		url: string;
+		width: number;
+	};
 
-	const reflection =
-		store.get("reflection");
+	type PetData = {
+		animations: AnimationData[];
+		holdingAnimation: AnimationData | null;
+		reflectionOffset: number;
+	};
 
+	const petData = store.get("pet") as PetData | undefined;
+
+	if(petData) {
+		let holdingAnimationData = petData.holdingAnimation;
+		let holdingAnimation = null;
+
+		if(holdingAnimationData) {
+			holdingAnimation = new Animation(
+				holdingAnimationData.url,
+				holdingAnimationData.name,
+				holdingAnimationData.width
+			);
+		}
+
+		pet = new Pet(petData.animations.map(a=>new Animation(a.url, a.name, a.width)), holdingAnimation, petData.reflectionOffset);
+	}
+
+	const reflectionSaved = store.get("reflection");
 	const speed = store.get("speed");
+	const animation = store.get("animation");
 
-	if (petPath) {
-		await loadPet(petPath);
+	if (typeof reflectionSaved == "number") {
+		setReflection(reflectionSaved);
+	} else {
+		store.delete("reflection")
 	}
 
-	if (reflection !== undefined) {
-		setReflection(reflection);
-	}
-
-	if (speed !== undefined) {
+	if (typeof speed == "number") {
 		setAnimationSpeed(speed);
+	} else {
+		store.delete("speed")
+	}
+
+	if(typeof animation == "number") {
+		setAnimation(animation);
+	} else {
+		store.delete("animation")
 	}
 });

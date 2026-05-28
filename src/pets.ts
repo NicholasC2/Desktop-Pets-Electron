@@ -17,8 +17,14 @@ export class Pet {
     public holdingAnimation: Animation | null = null;
     public reflectionOffset: number = 0;
 
+    constructor(animations: Animation[], holdingAnimation: Animation | null, reflectionOffset: number) {
+        this.animations = animations;
+        this.holdingAnimation = holdingAnimation;
+        this.reflectionOffset = reflectionOffset;
+    }
+
     static async fromFile(path: string): Promise<Pet> {
-        const pet = new Pet()
+        const pet = new Pet([], null, 0)
 
         const directory = await unzipper.Open.file(path);
 
@@ -72,18 +78,26 @@ export class Pet {
             if(holdingAnimation) {
                 if(
                     typeof holdingAnimation.path == "string" &&
-                    typeof holdingAnimation.name == "string" &&
                     typeof holdingAnimation.width == "number"
                 ) {
+
                     const url = await getAnimationURL(holdingAnimation.path);
 
                     if(url) {
                         pet.holdingAnimation = new Animation(
                             url,
-                            holdingAnimation.name,
+                            "holding",
                             holdingAnimation.width
                         )
                     }
+                }
+            }
+
+            const reflectionOffset = parsedManifest.reflectionOffset
+
+            if(reflectionOffset) {
+                if(typeof reflectionOffset == "number") {
+                    pet.reflectionOffset = reflectionOffset;
                 }
             }
         } else {
